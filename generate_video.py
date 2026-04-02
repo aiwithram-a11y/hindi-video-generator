@@ -33,19 +33,42 @@ TTS_VOICE = "Tara"
 TTS_RATE = 158
 CRF = 20
 
-# Default background image
-DEFAULT_BG_IMAGE = "/Users/ramdudeja/Desktop/Claud_work_Folder/image.jpeg"
-
 # Path to Puppeteer renderer (relative to script location)
 SCRIPT_DIR = Path(__file__).parent.resolve()
 PUPPETEER_SCRIPT = SCRIPT_DIR / "src" / "render_hindi.js"
+
+# ── Image Selection ─────────────────────────────────────────────────────────────
+def select_image():
+    """Ask user to select a background image using macOS file dialog."""
+    import subprocess
+    try:
+        script = '''
+tell application "Finder"
+    activate
+    set selectedFile to choose file with prompt "Select a background image:" of type {"public.image"}
+    return POSIX path of selectedFile
+end tell
+'''
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        if result.returncode == 0:
+            path = result.stdout.strip()
+            print(f"  [IMAGE] Selected: {path}")
+            return path
+    except Exception as e:
+        print(f"  [IMAGE] Dialog error: {e}")
+    return None
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 def parse_args():
     p = argparse.ArgumentParser(description="Hindi Video Generator V13 - Chrome Text")
     p.add_argument("--article", default=None)
     p.add_argument("--output-dir", default=None)
-    p.add_argument("--bg-image", default=None, help="Background image (local or URL)")
+    p.add_argument("--bg-image", default=None, help="Background image (local path, URL, or 'ask' to prompt)")
     p.add_argument("--no-sarvam", action="store_true", help="Use macOS say instead of Sarvam")
     p.add_argument("--crf", type=int, default=20, help="CRF value")
     p.add_argument("--short", action="store_true", help="Short version")
@@ -450,9 +473,14 @@ def main():
         check_voice()
         print(f"  [TTS] macOS {TTS_VOICE}")
     
-    # Load background image if provided (or use default)
+    # Load background image (prompt if needed)
     bg_img = None
-    bg_path = ARGS.bg_image if ARGS.bg_image else DEFAULT_BG_IMAGE
+    bg_path = ARGS.bg_image
+    
+    # If --bg-image is "ask" or not provided, prompt user
+    if bg_path is None or bg_path.lower() == "ask":
+        print("\n  📷 Select a background image...")
+        bg_path = select_image()
     
     if bg_path and os.path.exists(bg_path):
         if bg_path.startswith("http"):
@@ -465,7 +493,7 @@ def main():
             bg_img = load_and_prepare_bg_image(bg_path)
         print(f"  [BG] Background image loaded: {bg_img.size}")
     else:
-        print(f"  [BG] No background image found, using gradient")
+        print(f"  [BG] No background image selected, using gradient")
     
     # Parse article
     print("\n[1/4] Parsing article...")
