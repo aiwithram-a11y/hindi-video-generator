@@ -29,12 +29,13 @@ from PIL import Image
 VIDEO_W, VIDEO_H = 1920, 1080
 FPS = 30
 WATERMARK = "ramkrishan.com"
+DEFAULT_BG_IMAGE = "/Users/ramdudeja/Desktop/hindi-video-generator/image_rk.png"
 TTS_VOICE = "Tara"
 TTS_RATE = 158
 CRF = 20
 
 # Path to Puppeteer renderer
-PUPPETEER_SCRIPT = "/tmp/render_hindi.js"
+PUPPETEER_SCRIPT = "/Users/ramdudeja/Desktop/Hindi-video-generator/src/render_hindi.js"
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 def parse_args():
@@ -457,17 +458,18 @@ def main():
         check_voice()
         print(f"  [TTS] macOS {TTS_VOICE}")
     
-    # Load background image if provided
+    # Load background image if provided (or use default)
+    bg_path = ARGS.bg_image if ARGS.bg_image else DEFAULT_BG_IMAGE
     bg_img = None
-    if ARGS.bg_image:
-        if ARGS.bg_image.startswith("http"):
+    if bg_path:
+        if bg_path.startswith("http"):
             import urllib.request
             with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
                 urllib.request.urlretrieve(ARGS.bg_image, tmp.name)
                 bg_img = load_and_prepare_bg_image(tmp.name)
                 os.unlink(tmp.name)
         else:
-            bg_img = load_and_prepare_bg_image(ARGS.bg_image)
+            bg_img = load_and_prepare_bg_image(bg_path)
         print(f"  [BG] Background image loaded: {bg_img.size}")
     
     # Parse article

@@ -2,6 +2,8 @@
 /**
  * Hindi Text Renderer using Puppeteer (Chrome)
  * Renders Hindi text with proper Devanagari shaping
+ * 
+ * IMPORTANT: Uses transparent background - composited later with background image
  */
 
 const puppeteer = require('puppeteer');
@@ -13,20 +15,19 @@ async function renderText(options) {
         outputPath,
         fontSize = 44,
         width = 1920,
-        height = 1080,
-        bgR = 15,
-        bgG = 20,
-        bgB = 45
+        height = 1080
     } = options;
 
     const browser = await puppeteer.launch({
         headless: true,
+        executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
         args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
 
     const page = await browser.newPage();
     await page.setViewport({ width, height, deviceScaleFactor: 1 });
 
+    // Hide background by setting transparent background and clipping to text area
     const html = `
 <!DOCTYPE html>
 <html>
@@ -34,15 +35,17 @@ async function renderText(options) {
 <meta charset="UTF-8">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body {
-    background: rgb(${bgR}, ${bgG}, ${bgB});
+html, body {
+    background: transparent;
     width: ${width}px;
     height: ${height}px;
+    overflow: hidden;
+}
+body {
     display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    align-items: center;
-    padding-bottom: 100px;
+    justify-content: center;
+    align-items: flex-end;
+    padding-bottom: 80px;
     font-family: 'Noto Sans Devanagari', 'Kohinoor Devanagari', -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -50,13 +53,15 @@ body {
 .text-container {
     text-align: center;
     max-width: 1800px;
-    padding: 0 60px;
+    padding: 20px 60px;
+    background: rgba(0, 0, 0, 0.75);
+    border-radius: 12px;
 }
 .subtitle {
     color: white;
     font-size: ${fontSize}px;
     line-height: 1.6;
-    text-shadow: 2px 2px 8px rgba(0,0,0,0.9), -1px -1px 4px rgba(0,0,0,0.9);
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
 }
 .watermark {
     position: fixed;
@@ -79,13 +84,14 @@ body {
 
     await page.setContent(html, { waitUntil: 'networkidle0' });
     
-    // Wait a bit for fonts to load
+    // Wait for fonts to load
     await new Promise(resolve => setTimeout(resolve, 500));
 
+    // Take screenshot with transparent background
     await page.screenshot({
         path: outputPath,
         type: 'png',
-        omitBackground: false
+        omitBackground: true  // This makes the background transparent
     });
 
     await browser.close();
