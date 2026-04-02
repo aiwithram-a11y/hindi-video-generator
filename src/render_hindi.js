@@ -2,6 +2,8 @@
 /**
  * Hindi Text Renderer using Puppeteer (Chrome)
  * Renders Hindi text with proper Devanagari shaping
+ * 
+ * IMPORTANT: Uses transparent background - composited later with background image
  */
 
 const puppeteer = require('puppeteer');
@@ -13,10 +15,7 @@ async function renderText(options) {
         outputPath,
         fontSize = 44,
         width = 1920,
-        height = 1080,
-        bgR = 0,
-        bgG = 0,
-        bgB = 0
+        height = 1080
     } = options;
 
     const browser = await puppeteer.launch({
@@ -27,10 +26,7 @@ async function renderText(options) {
     const page = await browser.newPage();
     await page.setViewport({ width, height, deviceScaleFactor: 1 });
 
-    // Calculate text area position (bottom of frame)
-    const textAreaTop = height - 250;
-    const textAreaHeight = 200;
-
+    // Hide background by setting transparent background and clipping to text area
     const html = `
 <!DOCTYPE html>
 <html>
@@ -38,25 +34,27 @@ async function renderText(options) {
 <meta charset="UTF-8">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body {
+html, body {
     background: transparent;
     width: ${width}px;
     height: ${height}px;
+    overflow: hidden;
+}
+body {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    padding-bottom: 80px;
     font-family: 'Noto Sans Devanagari', 'Kohinoor Devanagari', -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
 .text-container {
-    position: absolute;
-    bottom: 80px;
-    left: 0;
-    right: 0;
     text-align: center;
     max-width: 1800px;
-    margin: 0 auto;
     padding: 20px 60px;
-    background: rgba(0, 0, 0, 0.7);
-    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.75);
+    border-radius: 12px;
 }
 .subtitle {
     color: white;
@@ -65,7 +63,7 @@ body {
     text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
 }
 .watermark {
-    position: absolute;
+    position: fixed;
     bottom: 30px;
     right: 40px;
     color: rgba(150,150,150,0.7);
@@ -85,13 +83,14 @@ body {
 
     await page.setContent(html, { waitUntil: 'networkidle0' });
     
-    // Wait a bit for fonts to load
+    // Wait for fonts to load
     await new Promise(resolve => setTimeout(resolve, 500));
 
+    // Take screenshot with transparent background
     await page.screenshot({
         path: outputPath,
         type: 'png',
-        omitBackground: false
+        omitBackground: true  // This makes the background transparent
     });
 
     await browser.close();

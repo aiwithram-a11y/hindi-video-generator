@@ -335,11 +335,7 @@ def create_clip_with_chrome_text(
     else:
         frame = create_base_background()
     
-    # Darken background slightly
-    dark = Image.new("RGB", frame.size, (0, 0, 0))
-    frame = Image.blend(frame, dark, 0.15)
-    
-    # Overlay text image
+    # Overlay text image (text has its own dark background)
     if text_img_path.exists():
         text_img = Image.open(str(text_img_path)).convert("RGBA")
         frame.paste(text_img, (0, 0), text_img)
