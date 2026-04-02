@@ -42,7 +42,7 @@ def parse_args():
     p = argparse.ArgumentParser(description="Hindi Video Generator V13 - Chrome Text")
     p.add_argument("--article", default=None)
     p.add_argument("--output-dir", default=None)
-    p.add_argument("--bg-image", default=None, help="Background image (local or URL)")
+    p.add_argument("--bg-image", default=None, help="Background image (local path, URL, or 'ask' to prompt)")
     p.add_argument("--no-sarvam", action="store_true", help="Use macOS say instead of Sarvam")
     p.add_argument("--crf", type=int, default=20, help="CRF value")
     p.add_argument("--short", action="store_true", help="Short version")
@@ -313,19 +313,12 @@ def create_clip_with_chrome_text(
     # Render text with Chrome
     text_img_path = TEXT_IMG_DIR / f"text_{idx:04d}.png"
     if not text_img_path.exists():
-        # Use background image colors for the text renderer's background
-        if bg_image:
-            # Sample center pixel for background color
-            px = bg_image.getpixel((VIDEO_W // 2, VIDEO_H // 2))
-            bg_r, bg_g, bg_b = int(px[0] * 0.6), int(px[1] * 0.6), int(px[2] * 0.6)
-        else:
-            bg_r, bg_g, bg_b = 15, 20, 45
-        
+        # Use a dark semi-transparent background for the text
+        # This ensures text is readable on any background
         success = render_text_with_chrome(
             text, 
             str(text_img_path),
-            font_size=44,
-            bg_r=bg_r, bg_g=bg_g, bg_b=bg_b
+            font_size=44
         )
         
         if not success:
@@ -339,11 +332,7 @@ def create_clip_with_chrome_text(
     else:
         frame = create_base_background()
     
-    # Darken background slightly
-    dark = Image.new("RGB", frame.size, (0, 0, 0))
-    frame = Image.blend(frame, dark, 0.15)
-    
-    # Overlay text image
+    # Overlay text image (text has its own dark background)
     if text_img_path.exists():
         text_img = Image.open(str(text_img_path)).convert("RGBA")
         frame.paste(text_img, (0, 0), text_img)
@@ -465,12 +454,14 @@ def main():
         if bg_path.startswith("http"):
             import urllib.request
             with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-                urllib.request.urlretrieve(ARGS.bg_image, tmp.name)
+                urllib.request.urlretrieve(bg_path, tmp.name)
                 bg_img = load_and_prepare_bg_image(tmp.name)
                 os.unlink(tmp.name)
         else:
             bg_img = load_and_prepare_bg_image(bg_path)
         print(f"  [BG] Background image loaded: {bg_img.size}")
+    else:
+        print(f"  [BG] No background image selected, using gradient")
     
     # Parse article
     print("\n[1/4] Parsing article...")
