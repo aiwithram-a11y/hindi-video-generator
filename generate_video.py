@@ -33,8 +33,12 @@ TTS_VOICE = "Tara"
 TTS_RATE = 158
 CRF = 20
 
-# Path to Puppeteer renderer
-PUPPETEER_SCRIPT = "/tmp/render_hindi.js"
+# Default background image
+DEFAULT_BG_IMAGE = "/Users/ramdudeja/Desktop/Claud_work_Folder/image.jpeg"
+
+# Path to Puppeteer renderer (relative to script location)
+SCRIPT_DIR = Path(__file__).parent.resolve()
+PUPPETEER_SCRIPT = SCRIPT_DIR / "src" / "render_hindi.js"
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 def parse_args():
@@ -457,18 +461,22 @@ def main():
         check_voice()
         print(f"  [TTS] macOS {TTS_VOICE}")
     
-    # Load background image if provided
+    # Load background image if provided (or use default)
     bg_img = None
-    if ARGS.bg_image:
-        if ARGS.bg_image.startswith("http"):
+    bg_path = ARGS.bg_image if ARGS.bg_image else DEFAULT_BG_IMAGE
+    
+    if bg_path and os.path.exists(bg_path):
+        if bg_path.startswith("http"):
             import urllib.request
             with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-                urllib.request.urlretrieve(ARGS.bg_image, tmp.name)
+                urllib.request.urlretrieve(bg_path, tmp.name)
                 bg_img = load_and_prepare_bg_image(tmp.name)
                 os.unlink(tmp.name)
         else:
-            bg_img = load_and_prepare_bg_image(ARGS.bg_image)
+            bg_img = load_and_prepare_bg_image(bg_path)
         print(f"  [BG] Background image loaded: {bg_img.size}")
+    else:
+        print(f"  [BG] No background image found, using gradient")
     
     # Parse article
     print("\n[1/4] Parsing article...")

@@ -51,7 +51,9 @@ The script uses Chrome's built-in Noto Sans Devanagari font. For best results, e
 python generate_video.py --article path/to/article.md
 ```
 
-### With Background Image
+By default, the script uses the background image configured in the script (`DEFAULT_BG_IMAGE`).
+
+### With Custom Background Image
 
 ```bash
 python generate_video.py \
@@ -66,7 +68,7 @@ python generate_video.py \
 |--------|-------------|---------|
 | `--article` | Path to article markdown file | Required |
 | `--output-dir` | Output directory | `./output` |
-| `--bg-image` | Background image (local path or URL) | None (gradient background) |
+| `--bg-image` | Background image (local path or URL) | Configured in script |
 | `--crf` | Video quality (lower = better, 18-28) | 20 |
 | `--short` | Generate short version (first 2 sentences per section) | False |
 | `--no-sarvam` | Use macOS TTS instead of Sarvam AI | False |
