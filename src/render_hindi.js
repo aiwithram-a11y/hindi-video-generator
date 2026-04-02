@@ -14,9 +14,9 @@ async function renderText(options) {
         fontSize = 44,
         width = 1920,
         height = 1080,
-        bgR = 15,
-        bgG = 20,
-        bgB = 45
+        bgR = 0,
+        bgG = 0,
+        bgB = 0
     } = options;
 
     const browser = await puppeteer.launch({
@@ -27,6 +27,10 @@ async function renderText(options) {
     const page = await browser.newPage();
     await page.setViewport({ width, height, deviceScaleFactor: 1 });
 
+    // Calculate text area position (bottom of frame)
+    const textAreaTop = height - 250;
+    const textAreaHeight = 200;
+
     const html = `
 <!DOCTYPE html>
 <html>
@@ -35,31 +39,33 @@ async function renderText(options) {
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-    background: rgb(${bgR}, ${bgG}, ${bgB});
+    background: transparent;
     width: ${width}px;
     height: ${height}px;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    align-items: center;
-    padding-bottom: 100px;
     font-family: 'Noto Sans Devanagari', 'Kohinoor Devanagari', -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
 .text-container {
+    position: absolute;
+    bottom: 80px;
+    left: 0;
+    right: 0;
     text-align: center;
     max-width: 1800px;
-    padding: 0 60px;
+    margin: 0 auto;
+    padding: 20px 60px;
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 10px;
 }
 .subtitle {
     color: white;
     font-size: ${fontSize}px;
     line-height: 1.6;
-    text-shadow: 2px 2px 8px rgba(0,0,0,0.9), -1px -1px 4px rgba(0,0,0,0.9);
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
 }
 .watermark {
-    position: fixed;
+    position: absolute;
     bottom: 30px;
     right: 40px;
     color: rgba(150,150,150,0.7);

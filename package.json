@@ -1,21 +1,18 @@
 {
-  "name": "hindi-video-generator",
+  "name": "video_generator",
   "version": "1.0.0",
-  "description": "Generate narrated Hindi videos with proper Devanagari text rendering",
-  "main": "src/render_hindi.js",
-  "scripts": {
-    "test": "echo \"Run tests with: python -m pytest tests/\" && exit 1"
+  "main": "index.js",
+  "directories": {
+    "example": "examples"
   },
-  "keywords": [
-    "hindi",
-    "devanagari",
-    "video",
-    "tts",
-    "text-to-speech"
-  ],
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
   "author": "",
-  "license": "MIT",
+  "license": "ISC",
+  "description": "",
   "dependencies": {
-    "puppeteer": "^21.0.0"
+    "puppeteer": "^24.40.0"
   }
 }

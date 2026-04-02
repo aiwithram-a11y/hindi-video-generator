@@ -316,19 +316,12 @@ def create_clip_with_chrome_text(
     # Render text with Chrome
     text_img_path = TEXT_IMG_DIR / f"text_{idx:04d}.png"
     if not text_img_path.exists():
-        # Use background image colors for the text renderer's background
-        if bg_image:
-            # Sample center pixel for background color
-            px = bg_image.getpixel((VIDEO_W // 2, VIDEO_H // 2))
-            bg_r, bg_g, bg_b = int(px[0] * 0.6), int(px[1] * 0.6), int(px[2] * 0.6)
-        else:
-            bg_r, bg_g, bg_b = 15, 20, 45
-        
+        # Use a dark semi-transparent background for the text
+        # This ensures text is readable on any background
         success = render_text_with_chrome(
             text, 
             str(text_img_path),
-            font_size=44,
-            bg_r=bg_r, bg_g=bg_g, bg_b=bg_b
+            font_size=44
         )
         
         if not success:
