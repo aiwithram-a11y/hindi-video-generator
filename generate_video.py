@@ -110,7 +110,7 @@ const {{ renderText }} = require('{PUPPETEER_SCRIPT}');
     ]
     
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         return result.returncode == 0
     except Exception as e:
         print(f"  [CHROME ERROR] {e}")
