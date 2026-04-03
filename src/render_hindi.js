@@ -21,13 +21,12 @@ async function renderText(options) {
     const browser = await puppeteer.launch({
         headless: true,
         executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     });
 
     const page = await browser.newPage();
     await page.setViewport({ width, height, deviceScaleFactor: 1 });
 
-    // Hide background by setting transparent background and clipping to text area
     const html = `
 <!DOCTYPE html>
 <html>
@@ -82,16 +81,16 @@ body {
 </html>
     `;
 
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 60000 });
     
-    // Wait for fonts to load
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // Short wait for fonts
+    await new Promise(resolve => setTimeout(resolve, 200));
 
     // Take screenshot with transparent background
     await page.screenshot({
         path: outputPath,
         type: 'png',
-        omitBackground: true  // This makes the background transparent
+        omitBackground: true
     });
 
     await browser.close();
