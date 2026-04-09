@@ -67,6 +67,7 @@ Thumbs.db
 
 # Output directories
 output/
+output_v13/
 *.mp4
 *.mp3
 *.wav

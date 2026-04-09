@@ -29,13 +29,19 @@ from PIL import Image
 VIDEO_W, VIDEO_H = 1920, 1080
 FPS = 30
 WATERMARK = "ramkrishan.com"
-DEFAULT_BG_IMAGE = "/Users/ramdudeja/Desktop/hindi-video-generator/image_rk.png"
+DEFAULT_BG_IMAGE = "/Users/ramdudeja/Desktop/Hindi-video-generator/image_rk_url.jpg"
 TTS_VOICE = "Tara"
 TTS_RATE = 158
 CRF = 20
 
-# Path to Puppeteer renderer
-PUPPETEER_SCRIPT = "/Users/ramdudeja/Desktop/Hindi-video-generator/src/render_hindi.js"
+# Python renderer - no Node/Chrome needed
+HINDI_FONT_PATHS = [
+    "/Users/ramdudeja/Desktop/Hindi-video-generator/fonts/NotoSansDevanagari-Regular.ttf",
+    "/System/Library/Fonts/Supplemental/DevanagariMT.ttc",
+    "/System/Library/Fonts/Kohinoor.ttc",
+    "/Library/Fonts/NotoSansDevanagari-Regular.ttf",
+    "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+]
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 def parse_args():
@@ -69,52 +75,217 @@ def ensure_dirs():
     for d in [OUTPUT_DIR, CLIPS_DIR, AUDIO_DIR, TEXT_IMG_DIR]:
         d.mkdir(parents=True, exist_ok=True)
 
-# ── Chrome Text Renderer ───────────────────────────────────────────────────────
-def render_text_with_chrome(text: str, output_path: str, font_size: int = 44, 
+# ── Text Renderer: Playwright (primary) + Pillow (fallback) ───────────────────
+
+# Fonts with broad Unicode coverage (Latin + Devanagari) used by Pillow fallback.
+# Arial Unicode MS is prioritised because it covers both scripts on every Mac.
+BROAD_FONT_PATHS = [
+    "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",   # Latin + Devanagari
+    "/System/Library/Fonts/Kohinoor.ttc",                      # Devanagari (good matras)
+    "/System/Library/Fonts/Supplemental/DevanagariMT.ttc",
+    "/Users/ramdudeja/Desktop/Hindi-video-generator/fonts/NotoSansDevanagari-Regular.ttf",
+    "/Library/Fonts/NotoSansDevanagari-Regular.ttf",
+]
+
+def _get_hindi_font(size: int):
+    """Return a PIL font that covers both Devanagari and Latin glyphs."""
+    from PIL import ImageFont
+    for path in BROAD_FONT_PATHS:
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size)
+            except Exception:
+                continue
+    return ImageFont.load_default()
+
+
+def _scaled_font_size(text: str, base: int) -> int:
+    """Scale font size down for longer lines."""
+    n = len(text)
+    if n > 80:
+        return 32
+    if n > 60:
+        return 36
+    if n > 40:
+        return 40
+    return base
+
+
+def _render_with_playwright(text: str, output_path: str, font_size: int) -> bool:
+    """
+    Primary renderer: headless Chromium via Playwright.
+    Chrome uses HarfBuzz for text shaping, so Devanagari matras are placed
+    correctly AND Latin/English characters are rendered via CSS font fallback.
+
+    Install once with:
+        pip install playwright
+        playwright install chromium
+    """
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("  [INFO] Playwright not installed — run: pip install playwright && playwright install chromium")
+        return False
+
+    fs = _scaled_font_size(text, font_size)
+
+    # Build @font-face URI from the first font file found on disk
+    hindi_font_uri = ""
+    for fp in HINDI_FONT_PATHS:
+        if os.path.exists(fp):
+            hindi_font_uri = Path(fp).as_uri()
+            break
+
+    font_face_rule = (
+        f"@font-face {{ font-family: 'DevFont'; src: url('{hindi_font_uri}'); }}"
+        if hindi_font_uri else ""
+    )
+    font_family = (
+        "'DevFont', 'Noto Sans Devanagari', 'Kohinoor Devanagari', "
+        "'DevanagariMT', 'Arial Unicode MS', 'Noto Sans', sans-serif"
+    )
+
+    import html as _html
+    safe_text = _html.escape(text)
+
+    html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  html, body {{
+    width: {VIDEO_W}px;
+    height: {VIDEO_H}px;
+    background: transparent;
+    overflow: hidden;
+  }}
+  {font_face_rule}
+  .box {{
+    position: absolute;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 84%;
+    background: rgba(0, 0, 0, 0.78);
+    border-radius: 12px;
+    padding: 22px 52px;
+    text-align: center;
+    word-wrap: break-word;
+  }}
+  .text {{
+    font-family: {font_family};
+    font-size: {fs}px;
+    color: #ffffff;
+    line-height: 1.6;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.9), -1px -1px 3px rgba(0,0,0,0.7);
+  }}
+  .watermark {{
+    position: absolute;
+    bottom: 28px;
+    right: 32px;
+    font-family: Arial, sans-serif;
+    font-size: 18px;
+    color: rgba(180, 180, 180, 0.7);
+  }}
+</style>
+</head>
+<body>
+  <div class="box"><div class="text">{safe_text}</div></div>
+  <div class="watermark">{WATERMARK}</div>
+</body>
+</html>"""
+
+    try:
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page(viewport={"width": VIDEO_W, "height": VIDEO_H})
+            page.set_content(html_content, wait_until="domcontentloaded")
+            page.screenshot(
+                path=str(output_path),
+                type="png",
+                omit_background=True,
+                full_page=False,
+            )
+            browser.close()
+        return True
+    except Exception as e:
+        print(f"  [PLAYWRIGHT ERROR] {e}")
+        return False
+
+
+def _render_with_pillow(text: str, output_path: str, font_size: int) -> bool:
+    """
+    Fallback renderer using Pillow.
+    Uses Arial Unicode MS so Latin/English characters are visible.
+    Matra placement may still be imperfect without libraqm — install Playwright
+    for pixel-perfect Devanagari.
+    """
+    from PIL import ImageDraw, ImageFont
+
+    fs = _scaled_font_size(text, font_size)
+
+    try:
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        img = Image.new("RGBA", (VIDEO_W, VIDEO_H), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        font = _get_hindi_font(fs)
+
+        chars_per_line = max(20, int(VIDEO_W * 0.80 / (fs * 0.55)))
+        lines = textwrap.wrap(text, width=chars_per_line) or [text]
+
+        line_height = int(fs * 1.55)
+        total_text_h = len(lines) * line_height
+        pad_x, pad_y = 60, 20
+
+        max_line_w = max(
+            (draw.textbbox((0, 0), ln, font=font)[2] - draw.textbbox((0, 0), ln, font=font)[0])
+            for ln in lines
+        )
+        box_w = min(max_line_w + pad_x * 2, VIDEO_W - 40)
+        box_h = total_text_h + pad_y * 2
+        box_x = (VIDEO_W - box_w) // 2
+        box_y = VIDEO_H - box_h - 80
+
+        overlay = Image.new("RGBA", (VIDEO_W, VIDEO_H), (0, 0, 0, 0))
+        ImageDraw.Draw(overlay).rounded_rectangle(
+            [box_x, box_y, box_x + box_w, box_y + box_h],
+            radius=12, fill=(0, 0, 0, 190)
+        )
+        img = Image.alpha_composite(img, overlay)
+        draw = ImageDraw.Draw(img)
+
+        y = box_y + pad_y
+        for line in lines:
+            bb = draw.textbbox((0, 0), line, font=font)
+            x = (VIDEO_W - (bb[2] - bb[0])) // 2
+            draw.text((x + 2, y + 2), line, font=font, fill=(0, 0, 0, 200))
+            draw.text((x, y), line, font=font, fill=(255, 255, 255, 255))
+            y += line_height
+
+        wm_font = _get_hindi_font(18)
+        draw.text((VIDEO_W - 200, VIDEO_H - 46), WATERMARK,
+                  font=wm_font, fill=(150, 150, 150, 178))
+
+        img.save(str(output_path), "PNG")
+        return True
+
+    except Exception as e:
+        print(f"  [PILLOW RENDER ERROR] {e}")
+        return False
+
+
+def render_text_with_chrome(text: str, output_path: str, font_size: int = 44,
                             bg_r: int = 15, bg_g: int = 20, bg_b: int = 45) -> bool:
     """
-    Render Hindi text using Chrome/Puppeteer for proper Devanagari shaping.
-    Returns True if successful, False otherwise.
+    Render subtitle text.
+    1. Tries Playwright/headless-Chrome (correct HarfBuzz matra shaping + Latin support).
+    2. Falls back to Pillow with Arial Unicode MS (Latin visible; matras best-effort).
     """
-    # Escape text for HTML
-    html_escaped = (text
-                    .replace('\\', '\\\\')
-                    .replace('"', '\\"')
-                    .replace("'", "\\'")
-                    .replace('\n', '<br>'))
-    
-    # Calculate font size based on text length
-    if len(text) > 80:
-        fs = 32
-    elif len(text) > 60:
-        fs = 36
-    elif len(text) > 40:
-        fs = 40
-    else:
-        fs = font_size
-    
-    cmd = [
-        "node", "-e", f"""
-const {{ renderText }} = require('{PUPPETEER_SCRIPT}');
-(async () => {{
-    await renderText({{
-        text: "{html_escaped}",
-        outputPath: "{output_path}",
-        fontSize: {fs},
-        bgR: {bg_r},
-        bgG: {bg_g},
-        bgB: {bg_b}
-    }});
-}})();
-"""
-    ]
-    
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        return result.returncode == 0
-    except Exception as e:
-        print(f"  [CHROME ERROR] {e}")
-        return False
+    if _render_with_playwright(text, output_path, font_size):
+        return True
+    return _render_with_pillow(text, output_path, font_size)
 
 # ── Article parsing ─────────────────────────────────────────────────────────────
 def parse_sections(filepath):
@@ -310,7 +481,7 @@ def create_clip_with_chrome_text(
     
     dur = get_duration(audio_path)
     
-    # Render text with Chrome
+    # Render text with Python/Pillow
     text_img_path = TEXT_IMG_DIR / f"text_{idx:04d}.png"
     if not text_img_path.exists():
         # Use a dark semi-transparent background for the text
@@ -371,42 +542,8 @@ def create_clip_with_chrome_text(
     return out
 
 def create_fallback_text_image(text: str, output_path: Path):
-    """Fallback text image using Pillow (for when Chrome fails)."""
-    from PIL import ImageDraw, ImageFont
-    
-    img = Image.new("RGBA", (VIDEO_W, VIDEO_H), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    
-    # Try to find a font
-    font = None
-    for path, idx in [
-        ("/System/Library/Fonts/Supplemental/DevanagariMT.ttc", 0),
-        ("/System/Library/Fonts/Kohinoor.ttc", 0),
-    ]:
-        if os.path.exists(path):
-            try:
-                font = ImageFont.truetype(path, 44, index=idx)
-                break
-            except:
-                continue
-    
-    if font is None:
-        font = ImageFont.load_default()
-    
-    lines = textwrap.wrap(text, width=35)
-    y = VIDEO_H - 150
-    for line in lines:
-        bbox = draw.textbbox((0, 0), line, font=font)
-        x = (VIDEO_W - (bbox[2] - bbox[0])) // 2
-        # Draw outline
-        for dx in [-2, -1, 0, 1, 2]:
-            for dy in [-2, -1, 0, 1, 2]:
-                draw.text((x + dx, y + dy), line, font=font, fill=(0, 0, 0, 255))
-        # Draw white text
-        draw.text((x, y), line, font=font, fill=(255, 255, 255, 255))
-        y += 70
-    
-    img.save(str(output_path), "PNG")
+    """Last-resort fallback using Pillow with broad-coverage font."""
+    _render_with_pillow(text, str(output_path), font_size=44)
 
 # ── Concatenate clips ───────────────────────────────────────────────────────────
 def concatenate(clips):
@@ -434,8 +571,8 @@ def concatenate(clips):
 # ── Main ───────────────────────────────────────────────────────────────────────
 def main():
     print("=" * 70)
-    print("  Hindi Video Generator V13 - Chrome Text Rendering")
-    print("  Uses Chrome for proper Devanagari matra shaping")
+    print("  Hindi Video Generator V13 - Python Text Rendering")
+    print("  Uses Pillow for Devanagari text (no Chrome/Node needed)")
     print("=" * 70)
     
     ensure_dirs()
@@ -471,7 +608,7 @@ def main():
     total_sentences = sum(len(split_sentences(s["body"])) for s in sections)
     print(f"      {total_sentences} sentences total")
     
-    print("\n[2/4] Generating clips with Chrome text rendering...")
+    print("\n[2/4] Generating clips with Python text rendering...")
     all_clips = []
     idx = 0
     total_dur = 0.0
