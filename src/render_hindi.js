@@ -19,7 +19,7 @@ async function renderText(options) {
     } = options;
 
     const browser = await puppeteer.launch({
-        headless: true,
+        headless: 'new',
         executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     });
